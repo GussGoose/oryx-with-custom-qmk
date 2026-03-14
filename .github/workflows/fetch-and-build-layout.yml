@@ -9,7 +9,7 @@ on:
         default: "https://configure.zsa.io/voyager/layouts/bqbpg/EeaXpQ/0"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -19,21 +19,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Parse Oryx URL
         id: parse
         run: |
           url="${{ github.event.inputs.oryx_url }}"
+          path="$(echo "$url" | sed -E 's#https?://[^/]+/##' | sed 's#/$##')"
 
-          layout=$(echo "$url" | awk -F'/' '{print $(NF-2)}')
-          revision=$(echo "$url" | awk -F'/' '{print $(NF-1)}')
-          geometry=$(echo "$url" | awk -F'/' '{print $(NF-3)}')
+          geometry="$(echo "$path" | cut -d'/' -f1)"
+          section="$(echo "$path" | cut -d'/' -f2)"
+          layout="$(echo "$path" | cut -d'/' -f3)"
+          revision="$(echo "$path" | cut -d'/' -f4)"
 
-          echo "layout=$layout" >> $GITHUB_OUTPUT
-          echo "revision=$revision" >> $GITHUB_OUTPUT
-          echo "geometry=$geometry" >> $GITHUB_OUTPUT
-          echo "local_layout_id=${layout}_${revision}" >> $GITHUB_OUTPUT
+          if [ "$section" != "layouts" ]; then
+            echo "Unexpected Oryx URL format: $url"
+            exit 1
+          fi
+
+          if [ -z "$geometry" ] || [ -z "$layout" ] || [ -z "$revision" ]; then
+            echo "Failed to parse Oryx URL: $url"
+            exit 1
+          fi
+
+          echo "geometry=$geometry" >> "$GITHUB_OUTPUT"
+          echo "layout=$layout" >> "$GITHUB_OUTPUT"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+          echo "local_layout_id=${layout}_${revision}" >> "$GITHUB_OUTPUT"
 
       - name: Download layout metadata
         id: metadata
@@ -42,61 +54,81 @@ jobs:
           revision="${{ steps.parse.outputs.revision }}"
           geometry="${{ steps.parse.outputs.geometry }}"
 
-          response=$(curl --silent --location https://oryx.zsa.io/graphql \
-          --header 'Content-Type: application/json' \
-          --data "{\"query\":\"query getLayout(\$hashId:String!,\$revisionId:String!,\$geometry:String){layout(hashId:\$hashId,geometry:\$geometry,revisionId:\$revisionId){revision{hashId qmkVersion title}}}\",\"variables\":{\"hashId\":\"$layout\",\"revisionId\":\"$revision\",\"geometry\":\"$geometry\"}}")
+          response=$(curl --silent --show-error --location 'https://oryx.zsa.io/graphql' \
+            --header 'Content-Type: application/json' \
+            --data "{\"query\":\"query getLayout(\$hashId:String!,\$revisionId:String!,\$geometry:String){layout(hashId:\$hashId,geometry:\$geometry,revisionId:\$revisionId){revision{hashId qmkVersion title}}}\",\"variables\":{\"hashId\":\"$layout\",\"revisionId\":\"$revision\",\"geometry\":\"$geometry\"}}")
+
+          echo "$response"
 
           hash=$(echo "$response" | jq -r '.data.layout.revision.hashId')
-          firmware=$(echo "$response" | jq -r '.data.layout.revision.qmkVersion')
+          firmware_raw=$(echo "$response" | jq -r '.data.layout.revision.qmkVersion')
 
-          firmware=$(printf "%.0f" "$firmware")
+          if [ -z "$hash" ] || [ "$hash" = "null" ]; then
+            echo "Failed to fetch revision hash from Oryx."
+            exit 1
+          fi
 
-          echo "hash=$hash" >> $GITHUB_OUTPUT
-          echo "firmware=$firmware" >> $GITHUB_OUTPUT
+          if [ -z "$firmware_raw" ] || [ "$firmware_raw" = "null" ]; then
+            echo "Failed to fetch firmware version from Oryx."
+            exit 1
+          fi
+
+          firmware=$(printf "%.0f" "$firmware_raw")
+
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+          echo "firmware=$firmware" >> "$GITHUB_OUTPUT"
 
       - name: Download Oryx source
         run: |
-          curl -L https://oryx.zsa.io/source/${{ steps.metadata.outputs.hash }} -o source.zip
+          curl -L "https://oryx.zsa.io/source/${{ steps.metadata.outputs.hash }}" -o source.zip
 
       - name: Extract source
         run: |
-          mkdir layout
+          rm -rf layout
+          mkdir -p layout
           unzip -oj source.zip '*_source/*' -d layout
           rm source.zip
+          ls -la layout
 
       - name: Apply custom files
         run: |
           geometry="${{ steps.parse.outputs.geometry }}"
 
-          cp custom/${geometry}/config.h layout/config.h
-          cp custom/${geometry}/rules.mk layout/rules.mk
-          cp custom/${geometry}/custom_behavior.c layout/custom_behavior.c
+          test -f "custom/${geometry}/config.h"
+          test -f "custom/${geometry}/rules.mk"
+          test -f "custom/${geometry}/custom_behavior.c"
+
+          cp "custom/${geometry}/config.h" layout/config.h
+          cp "custom/${geometry}/rules.mk" layout/rules.mk
+          cp "custom/${geometry}/custom_behavior.c" layout/custom_behavior.c
 
           sed -i '1i #include "custom_behavior.c"' layout/keymap.c
 
       - name: Checkout QMK
         run: |
-          git clone https://github.com/zsa/qmk_firmware.git
-          cd qmk_firmware
-          git checkout firmware${{ steps.metadata.outputs.firmware }}
+          git clone --depth 1 --branch "firmware${{ steps.metadata.outputs.firmware }}" https://github.com/zsa/qmk_firmware.git
 
       - name: Move layout into QMK
         run: |
           geometry="${{ steps.parse.outputs.geometry }}"
           layout_id="${{ steps.parse.outputs.local_layout_id }}"
 
-          mkdir -p qmk_firmware/keyboards/zsa/${geometry}/keymaps/${layout_id}
-          cp layout/* qmk_firmware/keyboards/zsa/${geometry}/keymaps/${layout_id}/
+          mkdir -p "qmk_firmware/keyboards/zsa/${geometry}/keymaps/${layout_id}"
+          cp layout/* "qmk_firmware/keyboards/zsa/${geometry}/keymaps/${layout_id}/"
+          ls -la "qmk_firmware/keyboards/zsa/${geometry}/keymaps/${layout_id}"
 
       - name: Build firmware
         run: |
-          docker run -v $PWD/qmk_firmware:/root qmkfm/qmk_cli /bin/sh -c "
-          qmk setup zsa/qmk_firmware -y &&
-          make zsa/${{ steps.parse.outputs.geometry }}:${{ steps.parse.outputs.local_layout_id }}
+          docker run --rm -v "$PWD/qmk_firmware:/root" qmkfm/qmk_cli /bin/sh -c "
+            qmk setup zsa/qmk_firmware -y &&
+            make zsa/${{ steps.parse.outputs.geometry }}:${{ steps.parse.outputs.local_layout_id }}
           "
 
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
-          name: voyager_firmware
-          path: qmk_firmware/*.uf2
+          name: firmware_${{ steps.parse.outputs.local_layout_id }}
+          path: |
+            qmk_firmware/*.uf2
+            qmk_firmware/*.bin
+            qmk_firmware/*.hex
