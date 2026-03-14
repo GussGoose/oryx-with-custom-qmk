@@ -106,7 +106,7 @@ jobs:
 
       - name: Checkout QMK
         run: |
-          git clone --depth 1 --branch "firmware${{ steps.metadata.outputs.firmware }}" https://github.com/zsa/qmk_firmware.git
+          git clone --depth 1 --branch "firmware${{ steps.metadata.outputs.firmware }}" --recurse-submodules https://github.com/zsa/qmk_firmware.git
 
       - name: Move layout into QMK
         run: |
@@ -120,7 +120,7 @@ jobs:
       - name: Build firmware
         run: |
           docker run --rm -v "$PWD/qmk_firmware:/root" qmkfm/qmk_cli /bin/sh -c "
-            qmk setup zsa/qmk_firmware -y &&
+            cd /root &&
             make zsa/${{ steps.parse.outputs.geometry }}:${{ steps.parse.outputs.local_layout_id }}
           "
 
