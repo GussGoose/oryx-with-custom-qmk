@@ -32,13 +32,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository with full history
         uses: actions/checkout@v4
         with:
-          ref: oryx
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
 
-      - name: Download the full history for the merge to work correctly
-        run: git pull --unshallow
+      - name: Configure git
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+
+      - name: Ensure oryx branch exists
+        run: |
+          git fetch origin main oryx || true
+
+          if git show-ref --verify --quiet refs/remotes/origin/oryx; then
+            git checkout -B oryx origin/oryx
+          else
+            git checkout -B oryx origin/main
+            git push -u origin oryx
+          fi
 
       - name: Download layout source
         id: download-layout-source
@@ -47,9 +62,9 @@ jobs:
           local_layout_id="$(echo "$layout_id" | sed 's/\//_/g')"
 
           response=$(curl --location 'https://oryx.zsa.io/graphql' \
-          --header 'Content-Type: application/json' \
-          --data "{\"query\":\"query getLayout(\$hashId: String!, \$revisionId: String!, \$geometry: String) {layout(hashId: \$hashId, geometry: \$geometry, revisionId: \$revisionId) { revision { hashId, qmkVersion, title }}}\",\"variables\":{\"hashId\":\"$layout_id\",\"geometry\":\"${{ github.event.inputs.layout_geometry }}\",\"revisionId\":\"latest\"}}" \
-          | jq '.data.layout.revision | [.hashId, .qmkVersion, .title]')
+            --header 'Content-Type: application/json' \
+            --data "{\"query\":\"query getLayout(\$hashId: String!, \$revisionId: String!, \$geometry: String) {layout(hashId: \$hashId, geometry: \$geometry, revisionId: \$revisionId) { revision { hashId, qmkVersion, title }}}\",\"variables\":{\"hashId\":\"$layout_id\",\"geometry\":\"${{ github.event.inputs.layout_geometry }}\",\"revisionId\":\"latest\"}}" \
+            | jq '.data.layout.revision | [.hashId, .qmkVersion, .title]')
 
           hash_id=$(echo "${response}" | jq -r '.[0]')
           firmware_version=$(printf "%.0f" "$(echo "${response}" | jq -r '.[1]')")
@@ -79,33 +94,33 @@ jobs:
           unzip -oj source.zip '*_source/*' -d "${{ steps.download-layout-source.outputs.local_layout_id }}"
           rm source.zip
 
-      - name: Commit and Push changes
+      - name: Commit and push Oryx changes to oryx branch
         env:
           CHANGE_DESCRIPTION: ${{ steps.download-layout-source.outputs.change_description }}
         run: |
-          git config --local user.name "github-actions"
-          git config --local user.email "github-actions@github.com"
+          git checkout oryx
           git add .
-          printf "✨(oryx): %s\n" "$CHANGE_DESCRIPTION" | git commit -F - || echo "No layout change"
-          git push
+          git commit -m "✨(oryx): ${CHANGE_DESCRIPTION}" || echo "No layout change"
+          git push origin HEAD:oryx
 
-      - name: Merge Oryx with custom QMK
+      - name: Merge oryx into main
         run: |
-          git fetch origin main
+          git fetch origin main oryx
           git checkout -B main origin/main
-          git merge -Xignore-all-space oryx
-          git push
+          git merge -Xignore-all-space origin/oryx
+          git push origin HEAD:main
 
-      - name: Update QMK firmware submodule to latest version
+      - name: Update QMK firmware submodule to target version
         run: |
           git submodule update --init --remote --depth=1 --no-single-branch
           cd qmk_firmware
+          git fetch origin
           git checkout -B firmware${{ steps.download-layout-source.outputs.firmware_version }} origin/firmware${{ steps.download-layout-source.outputs.firmware_version }}
           git submodule update --init --recursive
           cd ..
           git add qmk_firmware
           git commit -m "✨(qmk): Update firmware" || echo "No QMK change"
-          git push
+          git push origin HEAD:main
 
       - name: Build qmk docker image
         run: docker build -t qmk .
@@ -134,7 +149,14 @@ jobs:
 
           normalized_layout_geometry="$(echo "${{ github.event.inputs.layout_geometry }}" | sed 's/\//_/g')"
 
-          echo "built_layout_file=$(find ./qmk_firmware -maxdepth 1 -type f -regex \".*${normalized_layout_geometry}.*\.\(bin\|hex\|uf2\)$\")" >> "$GITHUB_OUTPUT"
+          built_layout_file="$(find ./qmk_firmware -maxdepth 1 -type f -regex ".*${normalized_layout_geometry}.*\.\(bin\|hex\|uf2\)$" | head -n 1)"
+
+          if [[ -z "${built_layout_file}" ]]; then
+            echo "No built firmware artifact found."
+            exit 1
+          fi
+
+          echo "built_layout_file=${built_layout_file}" >> "$GITHUB_OUTPUT"
           echo "normalized_layout_geometry=${normalized_layout_geometry}" >> "$GITHUB_OUTPUT"
 
       - name: Upload layout
