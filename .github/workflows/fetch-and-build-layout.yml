@@ -59,6 +59,14 @@ jobs:
             git push -u origin oryx
           fi
 
+      - name: Restore custom folder from main
+        run: |
+          git fetch origin main
+          git checkout origin/main -- custom || true
+          ls -la
+          ls -la custom || true
+          ls -la custom/${{ github.event.inputs.layout_geometry }} || true
+
       - name: Download layout source
         id: download-layout-source
         run: |
@@ -112,6 +120,10 @@ jobs:
           layout_geometry="${{ github.event.inputs.layout_geometry }}"
 
           echo "Applying custom keymap files to ${local_layout_id}"
+
+          test -f "custom/${layout_geometry}/keymap.c"
+          test -f "custom/${layout_geometry}/config.h"
+          test -f "custom/${layout_geometry}/rules.mk"
 
           cp "custom/${layout_geometry}/keymap.c" "${local_layout_id}/keymap.c"
           cp "custom/${layout_geometry}/config.h" "${local_layout_id}/config.h"
