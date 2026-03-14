@@ -43,9 +43,9 @@ uint16_t get_flow_tap_term(uint16_t keycode, keyrecord_t *record, uint16_t prev_
   return 0;
 }
 
-bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+bool custom_process_record_user(uint16_t keycode, keyrecord_t *record) {
   switch (keycode) {
-    case F16:
+    case KC_F16:
       if (record->event.pressed) {
         register_code(KC_LGUI);
         tap_code(KC_TAB);
@@ -54,7 +54,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
       }
       return false;
 
-    case F17:
+    case KC_F17:
       if (record->event.pressed) {
         register_code(KC_LGUI);
         register_code(KC_LSFT);
@@ -65,7 +65,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
       }
       return false;
 
-    case F18:
+    case KC_F18:
       if (record->event.pressed) {
         register_code(KC_LGUI);
         tap_code(KC_GRV);
@@ -74,7 +74,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
       }
       return false;
 
-    case F19:
+    case KC_F19:
       if (record->event.pressed) {
         register_code(KC_LGUI);
         register_code(KC_LSFT);
