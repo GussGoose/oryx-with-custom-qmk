@@ -104,6 +104,25 @@ jobs:
 
           sed -i '1i #include "custom_behavior.c"' layout/keymap.c
 
+          python3 <<'PY'
+          from pathlib import Path
+
+          p = Path("layout/keymap.c")
+          text = p.read_text()
+
+          marker = "bool process_record_user(uint16_t keycode, keyrecord_t *record) {\n"
+          injection = marker + "  if (!custom_process_record_user(keycode, record)) { return false; }\n"
+
+          if marker not in text:
+              raise SystemExit("Could not find process_record_user signature in generated keymap.c")
+
+          text = text.replace(marker, injection, 1)
+          p.write_text(text)
+          PY
+
+          echo "Injected custom behavior into generated keymap.c"
+          grep -n "custom_process_record_user" layout/keymap.c || true
+
       - name: Checkout QMK
         run: |
           git clone --depth 1 --branch "firmware${{ steps.metadata.outputs.firmware }}" --recurse-submodules https://github.com/zsa/qmk_firmware.git
