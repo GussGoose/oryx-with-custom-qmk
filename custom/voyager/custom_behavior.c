@@ -1,4 +1,4 @@
-#define FLOW_TAP_TERM 100
+#pragma once
 
 static bool is_home_row_mod(uint16_t keycode) {
   switch (keycode) {
@@ -32,7 +32,6 @@ bool get_hold_on_other_key_press(uint16_t keycode, keyrecord_t *record) {
 }
 
 uint16_t get_flow_tap_term(uint16_t keycode, keyrecord_t *record, uint16_t prev_keycode) {
-
   if (is_thumb_tap_hold(keycode)) {
     return 0;
   }
@@ -42,4 +41,50 @@ uint16_t get_flow_tap_term(uint16_t keycode, keyrecord_t *record, uint16_t prev_
   }
 
   return 0;
+}
+
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+  switch (keycode) {
+    case F16:
+      if (record->event.pressed) {
+        register_code(KC_LGUI);
+        tap_code(KC_TAB);
+      } else {
+        unregister_code(KC_LGUI);
+      }
+      return false;
+
+    case F17:
+      if (record->event.pressed) {
+        register_code(KC_LGUI);
+        register_code(KC_LSFT);
+        tap_code(KC_TAB);
+      } else {
+        unregister_code(KC_LSFT);
+        unregister_code(KC_LGUI);
+      }
+      return false;
+
+    case F18:
+      if (record->event.pressed) {
+        register_code(KC_LGUI);
+        tap_code(KC_GRV);
+      } else {
+        unregister_code(KC_LGUI);
+      }
+      return false;
+
+    case F19:
+      if (record->event.pressed) {
+        register_code(KC_LGUI);
+        register_code(KC_LSFT);
+        tap_code(KC_GRV);
+      } else {
+        unregister_code(KC_LSFT);
+        unregister_code(KC_LGUI);
+      }
+      return false;
+  }
+
+  return true;
 }
