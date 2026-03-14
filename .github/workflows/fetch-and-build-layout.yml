@@ -137,6 +137,18 @@ jobs:
       - name: Build qmk docker image
         run: docker build -t qmk .
 
+      - name: Apply custom keymap overrides
+        run: |
+          keyboard_directory="qmk_firmware/keyboards/zsa"
+          layout="${{ github.event.inputs.layout_geometry }}"
+          layout_id="${{ steps.download-layout-source.outputs.local_layout_id }}"
+        
+          echo "Applying custom keymap files..."
+        
+          cp custom/voyager/keymap.c "$keyboard_directory/$layout/keymaps/$layout_id/keymap.c"
+          cp custom/voyager/config.h "$keyboard_directory/$layout/keymaps/$layout_id/config.h"
+          cp custom/voyager/rules.mk "$keyboard_directory/$layout/keymaps/$layout_id/rules.mk"
+
       - name: Build the layout
         id: build-layout
         run: |
