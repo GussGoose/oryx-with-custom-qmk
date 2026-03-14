@@ -3,10 +3,14 @@ name: Fetch and build layout
 on:
   workflow_dispatch:
     inputs:
-      layout_id:
-        description: "Layout id available in URL https://configure.zsa.io/voyager/layouts/[ID_IS_HERE]/latest"
+      layout_hash_id:
+        description: "Layout hash from URL https://configure.zsa.io/voyager/layouts/[LAYOUT_HASH]/[REVISION_HASH]/0"
         required: true
-        default: "bqbpg/EeaXpQ"
+        default: "bqbpg"
+      revision_hash_id:
+        description: "Revision hash from URL https://configure.zsa.io/voyager/layouts/[LAYOUT_HASH]/[REVISION_HASH]/0"
+        required: true
+        default: "EeaXpQ"
       layout_geometry:
         description: "Keyboard type"
         type: choice
@@ -58,25 +62,33 @@ jobs:
       - name: Download layout source
         id: download-layout-source
         run: |
-          layout_id='${{ github.event.inputs.layout_id }}'
-          local_layout_id="$(echo "$layout_id" | sed 's/\//_/g')"
+          layout_hash_id='${{ github.event.inputs.layout_hash_id }}'
+          revision_hash_id='${{ github.event.inputs.revision_hash_id }}'
+          local_layout_id="${layout_hash_id}_${revision_hash_id}"
 
-          response=$(curl --location 'https://oryx.zsa.io/graphql' \
+          response=$(curl --silent --show-error --location 'https://oryx.zsa.io/graphql' \
             --header 'Content-Type: application/json' \
-            --data "{\"query\":\"query getLayout(\$hashId: String!, \$revisionId: String!, \$geometry: String) {layout(hashId: \$hashId, geometry: \$geometry, revisionId: \$revisionId) { revision { hashId, qmkVersion, title }}}\",\"variables\":{\"hashId\":\"$layout_id\",\"geometry\":\"${{ github.event.inputs.layout_geometry }}\",\"revisionId\":\"latest\"}}" \
-            | jq '.data.layout.revision | [.hashId, .qmkVersion, .title]')
+            --data "{\"query\":\"query getLayout(\$hashId: String!, \$revisionId: String!, \$geometry: String) { layout(hashId: \$hashId, geometry: \$geometry, revisionId: \$revisionId) { revision { hashId qmkVersion title } } }\",\"variables\":{\"hashId\":\"$layout_hash_id\",\"geometry\":\"${{ github.event.inputs.layout_geometry }}\",\"revisionId\":\"$revision_hash_id\"}}")
 
-          hash_id=$(echo "${response}" | jq -r '.[0]')
-          firmware_version=$(printf "%.0f" "$(echo "${response}" | jq -r '.[1]')")
-          change_description=$(echo "${response}" | jq -r '.[2]')
+          echo "$response"
 
-          if [[ -z "${hash_id}" || "${hash_id}" == "null" ]]; then
-            echo "Failed to resolve layout hash from Oryx"
-            echo "${response}"
+          hash_id=$(echo "$response" | jq -r '.data.layout.revision.hashId')
+          firmware_version_raw=$(echo "$response" | jq -r '.data.layout.revision.qmkVersion')
+          change_description=$(echo "$response" | jq -r '.data.layout.revision.title')
+
+          if [[ -z "$hash_id" || "$hash_id" == "null" ]]; then
+            echo "Failed to resolve layout revision from Oryx."
             exit 1
           fi
 
-          if [[ -z "${change_description}" || "${change_description}" == "null" ]]; then
+          if [[ -z "$firmware_version_raw" || "$firmware_version_raw" == "null" ]]; then
+            echo "Oryx returned a null qmkVersion."
+            exit 1
+          fi
+
+          firmware_version=$(printf "%.0f" "$firmware_version_raw")
+
+          if [[ -z "$change_description" || "$change_description" == "null" ]]; then
             change_description="latest layout modification made with Oryx"
           fi
 
@@ -148,7 +160,6 @@ jobs:
           "
 
           normalized_layout_geometry="$(echo "${{ github.event.inputs.layout_geometry }}" | sed 's/\//_/g')"
-
           built_layout_file="$(find ./qmk_firmware -maxdepth 1 -type f -regex ".*${normalized_layout_geometry}.*\.\(bin\|hex\|uf2\)$" | head -n 1)"
 
           if [[ -z "${built_layout_file}" ]]; then
