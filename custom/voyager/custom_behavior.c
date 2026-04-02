@@ -15,14 +15,34 @@ static bool is_target_home_row_hold_key(uint16_t keycode) {
 
   switch (get_tap_keycode(keycode)) {
     case KC_A:
-    case KC_S:
+    case KC_B:
+    case KC_C:
     case KC_D:
+    case KC_E:
     case KC_F:
     case KC_G:
     case KC_H:
+    case KC_I:
     case KC_J:
     case KC_K:
     case KC_L:
+    case KC_M:
+    case KC_N:
+    case KC_O:
+    case KC_P:
+    case KC_Q:
+    case KC_R:
+    case KC_S:
+    case KC_T:
+    case KC_U:
+    case KC_V:
+    case KC_W:
+    case KC_X:
+    case KC_Y:
+    case KC_Z:
+    case KC_COMM:
+    case KC_DOT:
+    case KC_SLSH:
     case KC_SCLN:
       return true;
     default:
