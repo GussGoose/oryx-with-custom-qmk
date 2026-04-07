@@ -88,6 +88,12 @@ bool custom_process_record_user(uint16_t keycode, keyrecord_t *record) {
   }
 
   switch (keycode) {
+    case KC_F17:
+      if (record->event.pressed) {
+        rgb_matrix_toggle();
+      }
+      return false;
+
     case KC_F22:
       if (record->event.pressed) {
         swap_win_step();
