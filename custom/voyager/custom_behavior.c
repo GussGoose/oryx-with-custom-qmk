@@ -60,7 +60,7 @@ bool get_hold_on_other_key_press(uint16_t keycode, keyrecord_t *record) {
 
 uint16_t get_flow_tap_term(uint16_t keycode, keyrecord_t *record, uint16_t prev_keycode) {
   if (is_target_home_row_hold_key(keycode)) {
-    return 100;
+    return 50;
   }
 
   return FLOW_TAP_TERM;
