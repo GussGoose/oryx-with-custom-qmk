@@ -2,6 +2,14 @@
 
 static bool swap_win_active = false;
 
+static bool f16_waiting_second_tap = false;
+static bool f17_waiting_second_tap = false;
+
+static uint16_t f16_double_tap_timer = 0;
+static uint16_t f17_double_tap_timer = 0;
+
+#define CUSTOM_DOUBLE_TAP_TERM 250
+
 static bool is_hold_capable_key(uint16_t keycode) {
   return
     (keycode >= QK_MOD_TAP && keycode <= QK_MOD_TAP_MAX) ||
@@ -82,15 +90,43 @@ static void swap_win_step(void) {
   tap_code(KC_TAB);
 }
 
+void matrix_scan_user(void) {
+  if (f16_waiting_second_tap && timer_elapsed(f16_double_tap_timer) > CUSTOM_DOUBLE_TAP_TERM) {
+    f16_waiting_second_tap = false;
+  }
+
+  if (f17_waiting_second_tap && timer_elapsed(f17_double_tap_timer) > CUSTOM_DOUBLE_TAP_TERM) {
+    f17_waiting_second_tap = false;
+  }
+}
+
 bool custom_process_record_user(uint16_t keycode, keyrecord_t *record) {
   if (swap_win_active && keycode != KC_F22) {
     swap_win_release();
   }
 
   switch (keycode) {
+    case KC_F16:
+      if (record->event.pressed) {
+        if (f16_waiting_second_tap && timer_elapsed(f16_double_tap_timer) <= CUSTOM_DOUBLE_TAP_TERM) {
+          f16_waiting_second_tap = false;
+          tap_code(KC_F16);
+        } else {
+          f16_waiting_second_tap = true;
+          f16_double_tap_timer = timer_read();
+        }
+      }
+      return false;
+
     case KC_F17:
       if (record->event.pressed) {
-        rgb_matrix_toggle();
+        if (f17_waiting_second_tap && timer_elapsed(f17_double_tap_timer) <= CUSTOM_DOUBLE_TAP_TERM) {
+          f17_waiting_second_tap = false;
+          rgb_matrix_toggle();
+        } else {
+          f17_waiting_second_tap = true;
+          f17_double_tap_timer = timer_read();
+        }
       }
       return false;
 
