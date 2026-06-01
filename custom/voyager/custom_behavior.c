@@ -2,14 +2,6 @@
 
 static bool swap_win_active = false;
 
-static bool f16_waiting_second_tap = false;
-static bool f17_waiting_second_tap = false;
-
-static uint16_t f16_double_tap_timer = 0;
-static uint16_t f17_double_tap_timer = 0;
-
-#define CUSTOM_DOUBLE_TAP_TERM 250
-
 #define SWAP_WIN_LAYER_KEY LT(1, KC_BSPC)
 #define SWAP_WIN_QUIT_KEY LGUI(KC_GRV)
 
@@ -93,39 +85,11 @@ static void swap_win_step(void) {
   tap_code(KC_TAB);
 }
 
-void matrix_scan_user(void) {
-  if (f16_waiting_second_tap && timer_elapsed(f16_double_tap_timer) > CUSTOM_DOUBLE_TAP_TERM) {
-    f16_waiting_second_tap = false;
-  }
-
-  if (f17_waiting_second_tap && timer_elapsed(f17_double_tap_timer) > CUSTOM_DOUBLE_TAP_TERM) {
-    f17_waiting_second_tap = false;
-  }
-}
-
 bool custom_process_record_user(uint16_t keycode, keyrecord_t *record) {
   switch (keycode) {
-    case KC_F16:
-      if (record->event.pressed) {
-        if (f16_waiting_second_tap && timer_elapsed(f16_double_tap_timer) <= CUSTOM_DOUBLE_TAP_TERM) {
-          f16_waiting_second_tap = false;
-          tap_code(KC_SYSTEM_SLEEP);
-        } else {
-          f16_waiting_second_tap = true;
-          f16_double_tap_timer = timer_read();
-        }
-      }
-      return false;
-
     case KC_F17:
       if (record->event.pressed) {
-        if (f17_waiting_second_tap && timer_elapsed(f17_double_tap_timer) <= CUSTOM_DOUBLE_TAP_TERM) {
-          f17_waiting_second_tap = false;
-          rgb_matrix_toggle();
-        } else {
-          f17_waiting_second_tap = true;
-          f17_double_tap_timer = timer_read();
-        }
+        rgb_matrix_toggle();
       }
       return false;
 
