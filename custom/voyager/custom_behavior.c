@@ -10,7 +10,7 @@ static uint16_t f17_double_tap_timer = 0;
 
 #define CUSTOM_DOUBLE_TAP_TERM 250
 
-#define SWAP_WIN_LAYER_KEY LT(1, KC_BSPC)
+#define SWAP_WIN_LAYER_KEY LT(1, KC_ENTER)
 #define SWAP_WIN_QUIT_KEY LGUI(KC_GRV)
 
 static bool is_hold_capable_key(uint16_t keycode) {
